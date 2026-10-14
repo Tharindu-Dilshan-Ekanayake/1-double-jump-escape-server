@@ -1,0 +1,58 @@
+# Builds the game server image, pushes it to this repo's GitHub Container
+# Registry and tells Bloxity Legion to roll it out.
+#   push to main -> prod channel   (https://1-double-jump-escape.host.bloxity.io)
+#   push to dev  -> dev channel    (https://1-double-jump-escape.dev.host.bloxity.io)
+#
+# One repository secret is needed: LEGION_DEPLOY_TOKEN (My Games -> eye icon).
+# After the first push, make the GHCR package public once
+# (repo -> Packages -> Package settings -> Change visibility) so Legion can pull it.
+name: Deploy game server
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  GAME_ID: 1-double-jump-escape
+  # Players per server: one full lobby (EscapeRoom maxClients = MAX_PLAYERS_PER_LOBBY).
+  # When a server is full the matchmaker starts another one.
+  SEAT_CAP: 8
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick channel and image name
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then CHANNEL=prod; else CHANNEL=dev; fi
+          OWNER=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
+          echo "IMAGE=ghcr.io/$OWNER/$GAME_ID-server:$CHANNEL-$GITHUB_SHA" >> "$GITHUB_ENV"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE }}
+
+      - name: Deploy on Bloxity Legion
+        env:
+          LEGION_DEPLOY_TOKEN: ${{ secrets.LEGION_DEPLOY_TOKEN }}
+        run: |
+          curl --fail-with-body -sS -X POST "https://legion.bloxity.io/v1/apps/$GAME_ID/deploy" \
+            -H "Authorization: Bearer $LEGION_DEPLOY_TOKEN" \
+            -H 'Content-Type: application/json' \
+            -d "{\"channel\":\"$CHANNEL\",\"image\":\"$IMAGE\",\"version\":\"$GITHUB_SHA\",\"seatCap\":$SEAT_CAP}"

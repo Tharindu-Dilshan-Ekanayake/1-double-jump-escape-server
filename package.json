@@ -1,20 +1,31 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Colyseus game server for +1 Double Jump Escape (8 players per lobby).",
+  "main": "src/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon --watch src src/server.js",
+    "sync-shared": "node scripts/sync-shared.js",
+    "test:lobbies": "node scripts/lobby-test.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
+    "@colyseus/core": "^0.18.18",
+    "@colyseus/schema": "^5.0.36",
+    "@colyseus/ws-transport": "^0.18.4",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "mongodb": "^6.21.0"
+  },
+  "devDependencies": {
+    "@colyseus/sdk": "^0.18.5",
     "nodemon": "^3.1.14"
   }
 }
