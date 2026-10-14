@@ -9,9 +9,11 @@ import {
   padWins,
   parseList,
   playerMoveStats,
+  raiseStars,
   reviveCost,
+  starsOf,
 } from '../shared/gameData.js'
-import { checkpointFor, getLayout, inLobby, insideBox, onPlateau, stageAt, trampolineAt } from '../shared/layout.js'
+import { checkpointFor, getLayout, inLobby, insideBox, onPlateau, stageAt, stagePar, trampolineAt } from '../shared/layout.js'
 import {
   addJump,
   bumpCounter,
@@ -95,6 +97,8 @@ const clean = (text, max) =>
     .slice(0, max)
 
 const num = (value, fallback = 0) => (Number.isFinite(value) ? value : fallback)
+/** A run: where and when it started, when it entered each stage, and whether it used a revive. */
+const newRun = (z, at) => ({ z, at, revived: false, entered: {} })
 const fail = (code) => ({ ok: false, code })
 
 /**
@@ -230,7 +234,7 @@ export class EscapeRoom extends Room {
       lastMoveAt: now,
       jumpWindow: { start: 0, count: 0 },
       /** Where and when the current run started; null after a suspicious jump. */
-      run: { z: player.z, at: now },
+      run: newRun(player.z, now),
       /** A server-approved teleport the next move may land on. */
       expect: null,
       groundTrail: [],
@@ -352,7 +356,7 @@ export class EscapeRoom extends Room {
       const expect = session.expect
       if (expect && now < expect.until && Math.hypot(x - expect.x, z - expect.z) < 6) {
         // A checkpoint starts a new run there; a revive carries the old one on.
-        if (!expect.keepRun) session.run = { z, at: now }
+        if (!expect.keepRun) session.run = newRun(z, now)
         session.expect = null
       } else if (!inLobby(z)) {
         session.run = null
@@ -370,7 +374,12 @@ export class EscapeRoom extends Room {
     if (Number.isInteger(m.f)) player.flips = m.f & 0xffff
 
     // In the lobby the run (re)starts; leaving it starts the clock.
-    if (inLobby(z)) session.run = { z, at: now }
+    if (inLobby(z)) session.run = newRun(z, now)
+    else if (session.run) {
+      // When the run first entered each stage (for the par-time star).
+      const stage = stageAt(layout, z)
+      if (stage && !session.run.entered[stage.index]) session.run.entered[stage.index] = now
+    }
 
     // Remember where the player stood on the course (a revive can put them back
     // there): a point every 1.5 studs, or every second when standing still.
@@ -417,6 +426,13 @@ export class EscapeRoom extends Room {
       return
     }
     session.lastPadAt = now
+    // Stars: 1 for the clear, +1 without a revive, +1 more under par time.
+    const run = session.run
+    const seconds = (now - (run.entered[index] ?? run.at)) / 1000
+    const par = stagePar(stage)
+    const earned = run.revived ? 1 : seconds <= par ? 3 : 2
+    const before = starsOf(player)[index - 1]
+    if (earned > before) player.stars = raiseStars(player.stars, index, earned)
     // One pad per run: the next run starts back in the lobby.
     session.run = null
     const wins = padWins(stage.wins, player, kind === 'double')
@@ -424,7 +440,7 @@ export class EscapeRoom extends Room {
     bumpCounter(player, session, 'wins', wins)
     bumpCounter(player, session, 'runs', 1)
     if (index > player.bestStage) player.bestStage = index
-    client.send('reward', { wins, stage: index, kind })
+    client.send('reward', { wins, stage: index, kind, stars: earned, before, seconds: Math.round(seconds * 10) / 10, par })
   }
 
   /** Pay Wins to carry on from the last safe spot instead of starting over. */
@@ -447,6 +463,7 @@ export class EscapeRoom extends Room {
     }
     player.wins -= cost
     bumpCounter(player, session, 'revives', 1)
+    if (session.run) session.run.revived = true
     // Revived on the run's own path: the run (and its clock) carries on.
     session.expect = { x, z, until: now + 6000, keepRun: true }
     this.reply(client, 'revive', { ok: true, code: 'revived', x, y, z, stage: index })

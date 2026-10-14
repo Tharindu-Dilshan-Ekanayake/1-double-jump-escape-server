@@ -41,6 +41,7 @@ export const PERSISTED_FIELDS = [
   'pass2xWins',
   'boostUntil',
   'bestStage',
+  'stars',
   'goal',
   'goalTarget',
   'counters',

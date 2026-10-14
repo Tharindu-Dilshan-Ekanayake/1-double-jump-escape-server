@@ -524,6 +524,17 @@ function addSharks(layout, stage, rng) {
  * Queries shared by client physics and server validation
  * ------------------------------------------------------------------------- */
 
+/**
+ * Par time (seconds) for the third star: from entering the stage to its Return
+ * pad, about twice what the stage's recommended build needs, plus a little
+ * to climb or line up.
+ */
+export function stagePar(stage) {
+  const length = stage.zStart - (stage.plateauZ0 - 14)
+  const speed = stageBuild(stage.index).speed
+  return Math.round((2 * length) / speed + 6 + (stage.gate === 'wall' ? 4 : 0))
+}
+
 /** True inside the lobby (and its gate passage). */
 export const inLobby = (z) => z > COURSE_START_Z
 

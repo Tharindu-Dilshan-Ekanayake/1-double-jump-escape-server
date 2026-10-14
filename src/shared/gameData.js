@@ -141,6 +141,27 @@ export const STAGES = [
 
 export const STAGE_COUNT = STAGES.length
 
+/*
+ * Stage stars (the three under each node of the race tracker):
+ *   1 = cleared, 2 = cleared without a revive, 3 = that, and under par time.
+ * Kept per player as a string of digits, one per stage ('3210000...').
+ */
+export const MAX_STARS = 3
+
+export function starsOf(player) {
+  const text = String(player?.stars || '')
+  return STAGES.map((_, i) => Math.min(MAX_STARS, Number(text[i]) || 0))
+}
+
+export const totalStars = (player) => starsOf(player).reduce((sum, n) => sum + n, 0)
+
+/** The stars text with stage `index` raised to at least `value`. */
+export function raiseStars(text, index, value) {
+  const list = starsOf({ stars: text })
+  list[index - 1] = Math.max(list[index - 1], Math.min(MAX_STARS, value))
+  return list.join('')
+}
+
 /* ---------------------------------------------------------------------------
  * Lookups & helpers
  * ------------------------------------------------------------------------- */
@@ -335,7 +356,7 @@ const SCRIPTED_GOALS = [
 ]
 
 export const SCRIPTED_GOAL_COUNT = SCRIPTED_GOALS.length
-const ENDLESS_KINDS = ['rebirths', 'wins', 'jumps', 'stage']
+const ENDLESS_KINDS = ['rebirths', 'wins', 'jumps', 'stage', 'stars']
 
 /** The value a goal of `kind` measures for a player. */
 export function goalValue(kind, player, counters = {}) {
@@ -355,6 +376,8 @@ export function goalValue(kind, player, counters = {}) {
       return player.rebirths || 0
     case 'jumps':
       return counters.jumps || 0
+    case 'stars':
+      return totalStars(player)
     default:
       return 0
   }
@@ -376,11 +399,13 @@ export function goalAt(index, player, counters = {}, storedTarget = 0) {
   let kind = ENDLESS_KINDS[n % ENDLESS_KINDS.length]
   // Nothing left to beat once the whole course is done.
   if (kind === 'stage' && (player.bestStage || 0) >= STAGE_COUNT && !storedTarget) kind = 'wins'
+  if (kind === 'stars' && totalStars(player) >= STAGE_COUNT * MAX_STARS && !storedTarget) kind = 'jumps'
   const value = goalValue(kind, player, counters)
   let target = storedTarget
   if (!target) {
     if (kind === 'rebirths') target = value + 1
     else if (kind === 'stage') target = Math.min(STAGE_COUNT, value + 1)
+    else if (kind === 'stars') target = Math.min(STAGE_COUNT * MAX_STARS, value + 3)
     else if (kind === 'wins') target = niceRound(Math.max(100, value * 2))
     else target = niceRound(value + 1000 * (1 + Math.floor(n / 4)))
   }
@@ -389,6 +414,7 @@ export function goalAt(index, player, counters = {}, storedTarget = 0) {
     stage: `BEAT STAGE ${target}!`,
     wins: `GET ${formatNumber(target).toUpperCase()} WINS!`,
     jumps: `JUMP ${formatNumber(target).toUpperCase()} TIMES!`,
+    stars: `EARN ${target} STAGE STARS!`,
   }[kind]
   return { index, kind, target, text, reward: { wins: Math.max(10, 3 * winsUnit(player)) }, endless: true }
 }

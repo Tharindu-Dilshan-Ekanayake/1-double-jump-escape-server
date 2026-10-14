@@ -42,6 +42,8 @@ export const PlayerState = schema(
     boostUntil: t.number().default(0),
 
     bestStage: t.uint8().default(0),
+    /** Stars per stage, one digit each ('3210...'); see starsOf in gameData. */
+    stars: t.string().default(''),
     goal: t.uint16().default(0),
     /** Target of the current endless goal (0 for scripted ones). */
     goalTarget: t.number().default(0),
