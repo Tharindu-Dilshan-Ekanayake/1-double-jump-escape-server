@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
+import { SAVE_VERSION } from '../shared/gameData.js'
+
 /**
  * Player profiles and the limited-item stock.
  *
@@ -14,6 +16,10 @@ import path from 'node:path'
  *  - JSON files in DATA_DIR otherwise (local development): everything lives in
  *    memory and is flushed to disk every few seconds (write-to-temp + rename, so
  *    a crash never leaves a half-written file).
+ *
+ * Every save carries `saveVersion` and `lastSeen`; loading an older version
+ * is migrated by migrateProfile (shared/progression.js) when the player joins.
+ * Guests are saved like accounts, under the id their browser keeps.
  */
 
 const DATA_DIR = process.env.DATA_DIR || path.resolve('data')
@@ -29,12 +35,20 @@ export const PERSISTED_FIELDS = [
   'name',
   'level',
   'xp',
-  'totalJump',
-  'wins',
   'rebirths',
+  'wins',
+  'totalJump',
+  'lifetimeLevels',
   'boot',
   'bootsOwned',
-  'tramps',
+  'perkGain',
+  'perkWins',
+  'perkSpeed',
+  'perkLuck',
+  'perkSlots',
+  'pets',
+  'petsEquipped',
+  'padsOwned',
   'trail',
   'trailsOwned',
   'pass2xJump',
@@ -42,8 +56,6 @@ export const PERSISTED_FIELDS = [
   'boostUntil',
   'bestStage',
   'stars',
-  'goal',
-  'goalTarget',
   'counters',
   'dailyAt',
   'dailyStreak',
@@ -130,10 +142,42 @@ export async function loadProfile(uid) {
 export function saveProfile(uid, state, extra = {}) {
   if (isTestUid(uid)) return
   const previous = profiles.get(uid) || {}
-  const next = { ...previous, ...extra, updatedAt: Date.now() }
+  const now = Date.now()
+  const next = { ...previous, ...extra, saveVersion: SAVE_VERSION, lastSeen: now, updatedAt: now }
   for (const field of PERSISTED_FIELDS) next[field] = state[field]
   profiles.set(uid, next)
   dirty.add(uid)
+}
+
+/**
+ * Hands a guest's save to an account that has never played, once: the guest
+ * save is marked `mergedInto` so it can never go to a second account.
+ * Resolves the guest's profile, or null when there is none to take.
+ */
+export async function claimGuestSave(guestUid, accountUid) {
+  if (isTestUid(guestUid)) return null
+  if (collection) {
+    // A guest who just left this pod may only be saved in memory so far.
+    if (dirty.has(guestUid)) {
+      await flushing
+      await flushProfiles()
+    }
+    const result = await collection.findOneAndUpdate(
+      { _id: guestUid, mergedInto: { $exists: false } },
+      { $set: { mergedInto: accountUid } },
+      { returnDocument: 'before' },
+    )
+    const doc = result?.value !== undefined ? result.value : result
+    if (!doc) return null
+    const { _id: _ignored, ...profile } = doc
+    profiles.set(guestUid, { ...profile, mergedInto: accountUid })
+    return profile
+  }
+  const guest = profiles.get(guestUid)
+  if (!guest || guest.mergedInto) return null
+  profiles.set(guestUid, { ...guest, mergedInto: accountUid })
+  dirty.add(guestUid)
+  return { ...guest }
 }
 
 /** Writes every changed profile out (to MongoDB or the JSON file). */

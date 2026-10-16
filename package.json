@@ -7,7 +7,8 @@
     "start": "node src/server.js",
     "dev": "nodemon --watch src src/server.js",
     "sync-shared": "node scripts/sync-shared.js",
-    "test:lobbies": "node scripts/lobby-test.js"
+    "test:lobbies": "node scripts/lobby-test.js",
+    "test:economy": "node scripts/economy-test.js"
   },
   "keywords": [],
   "author": "",

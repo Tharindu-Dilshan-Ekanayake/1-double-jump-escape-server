@@ -1,30 +1,46 @@
 import {
+  BOOTS,
   BOOT_BY_ID,
   CHEST_COOLDOWN_MS,
-  CODES,
+  CONFIG,
   DAILY_COOLDOWN_MS,
   DAILY_MAX_STREAK,
   DAILY_STREAK_WINDOW_MS,
+  EGG_BY_ID,
   GIFTS,
-  MAX_LEVEL,
+  PAD_BY_ID,
+  PERK_FIELDS,
+  PET_BY_ID,
   PRODUCTS,
-  SCRIPTED_GOAL_COUNT,
+  REBIRTH_RESETS,
+  SHOP_PERKS,
   TRAIL_BY_ID,
-  TRAMPOLINE_BY_ID,
+  trailOpen,
+  applyXp,
+  bestPets,
   canRebirth,
   chestReward,
   dailyReward,
+  eggOpen,
   giftReward,
-  goalAt,
-  goalValue,
+  hatch,
   jumpsFor,
+  maxLevel,
+  minutesOfXp,
   moveStats,
   parseList,
-  xpForLevel,
+  parsePets,
+  perkLevel,
+  perkPrice,
+  petSlots,
+  productPrice,
+  rebirthMult,
+  titleIndex,
 } from '../shared/gameData.js'
 
 /**
- * Every server-side action that changes a player's stats.
+ * Every server-side action that changes a player's stats, applying the rules
+ * in shared/progression.js.
  *
  * Each function mutates the PlayerState (so Colyseus syncs the change) and returns
  * `{ ok: true, code, ... }` or `{ ok: false, code }`. Codes are machine words the
@@ -44,32 +60,31 @@ export function readJSON(text, fallback) {
   }
 }
 
-/** Adds Jump: always to the total (leaderboards), and to XP until MAX level. */
-export function addJump(player, amount) {
+/**
+ * Adds XP (a jump's worth, or a reward's) to the level bar (up to MAX) and to
+ * the lifetime total. Returns what a level up changed, or null.
+ */
+export function addXp(player, xp) {
+  if (!(xp > 0)) return null
   const from = player.level
-  player.totalJump = round2(player.totalJump + amount)
-  if (player.level < MAX_LEVEL) {
-    player.xp = round2(player.xp + amount)
-    let guard = 0
-    while (player.level < MAX_LEVEL && player.xp >= xpForLevel(player.level, player.rebirths) && guard < 100) {
-      player.xp = round2(player.xp - xpForLevel(player.level, player.rebirths))
-      player.level += 1
-      guard += 1
-    }
-    if (player.level >= MAX_LEVEL) player.xp = 0
-  }
-  if (player.level === from) return null
-  const before = moveStats(from, player.boot, player.rebirths)
-  const after = moveStats(player.level, player.boot, player.rebirths)
+  player.totalJump = round2(player.totalJump + xp)
+  const next = applyXp(player.level, player.xp, xp, player.rebirths)
+  player.level = next.level
+  player.xp = next.xp
+  if (!next.gained) return null
+  const fromTitle = titleIndex(player.lifetimeLevels)
+  player.lifetimeLevels += next.gained
+  const before = moveStats(from, player.boot, player.perkSpeed, player.rebirths)
+  const after = moveStats(player.level, player.boot, player.perkSpeed, player.rebirths)
   return {
     from,
     to: player.level,
-    jumpsFrom: jumpsFor(from),
+    max: maxLevel(player.rebirths),
+    jumpsFrom: before.jumps,
     jumpsTo: after.jumps,
     speedFrom: before.speed,
     speedTo: after.speed,
-    heightFrom: before.height,
-    heightTo: after.height,
+    title: titleIndex(player.lifetimeLevels) > fromTitle ? titleIndex(player.lifetimeLevels) : null,
   }
 }
 
@@ -78,14 +93,14 @@ export function bumpCounter(player, session, key, amount = 1) {
   player.counters = JSON.stringify(session.counters)
 }
 
-/** Pays a reward ({ wins, jump, boost }); returns a level-up if the Jump caused one. */
+/** Pays a reward ({ wins, xp, boost }); returns a level-up if the XP caused one. */
 export function grant(player, session, reward, now = Date.now()) {
   if (reward.wins) {
     player.wins += reward.wins
     bumpCounter(player, session, 'wins', reward.wins)
   }
   if (reward.boost) player.boostUntil = Math.max(player.boostUntil, now) + reward.boost * 60_000
-  if (reward.jump) return addJump(player, reward.jump)
+  if (reward.xp) return addXp(player, reward.xp)
   return null
 }
 
@@ -96,6 +111,11 @@ function spend(player, amount) {
   if (player.wins < amount) return false
   player.wins -= amount
   return true
+}
+
+/** Equips the best pets that fit the slots. */
+export function equipBestPets(player) {
+  player.petsEquipped = bestPets(parsePets(player.pets), petSlots(player)).join(',')
 }
 
 /* ---------------------------------------------------------------------------
@@ -114,6 +134,9 @@ export async function buy(player, { cat, id } = {}, limited) {
       player.boot = id
       return { ok: true, code: 'equipped', cat, id }
     }
+    // Boots are bought in order: the tier before this one first.
+    const index = BOOTS.indexOf(def)
+    if (index > 0 && !owns(player.bootsOwned, BOOTS[index - 1].id)) return fail('order', { need: BOOTS[index - 1].id })
     if (player.wins < def.price) return fail('poor', { need: def.price - player.wins })
     if (def.limited) {
       if (limited.left(id, def.limited) <= 0) return fail('soldout')
@@ -131,13 +154,39 @@ export async function buy(player, { cat, id } = {}, limited) {
     return { ok: true, code: 'bought', cat, id }
   }
 
-  if (cat === 'tramp') {
-    const def = TRAMPOLINE_BY_ID[id]
-    if (!def) return fail('unknown')
-    if (def.price === 0 || owns(player.tramps, id)) return fail('owned')
+  if (cat === 'pad') {
+    // The jump pads sold for Wins: bought once, kept for good (rebirths too).
+    const def = PAD_BY_ID[id]
+    if (!def?.price) return fail('unknown')
+    if (owns(player.padsOwned, id)) return fail('owned')
+    if ((player.rebirths ?? 0) < def.rebirths) return fail('locked', { need: def.rebirths })
     if (!spend(player, def.price)) return fail('poor', { need: def.price - player.wins })
-    player.tramps = addTo(player.tramps, id)
+    player.padsOwned = addTo(player.padsOwned, id)
     return { ok: true, code: 'bought', cat, id }
+  }
+
+  if (cat === 'perk') {
+    const perk = SHOP_PERKS[id]
+    if (!perk) return fail('unknown')
+    const level = perkLevel(player, id)
+    if (level >= perk.max) return fail('maxed')
+    const price = perkPrice(id, level)
+    if (!spend(player, price)) return fail('poor', { need: price - player.wins })
+    player[PERK_FIELDS[id]] = level + 1
+    if (id === 'slots') equipBestPets(player)
+    return { ok: true, code: 'bought', cat, id, level: level + 1 }
+  }
+
+  if (cat === 'egg') {
+    const egg = EGG_BY_ID[id]
+    if (!egg) return fail('unknown')
+    if (!eggOpen(player, egg)) return fail('locked', { need: egg.rebirths })
+    if (parsePets(player.pets).length >= CONFIG.petInventory) return fail('full')
+    if (!spend(player, egg.price)) return fail('poor', { need: egg.price - player.wins })
+    const pet = hatch(id, perkLevel(player, 'luck'), Math.random())
+    player.pets = [...parsePets(player.pets), pet].join(',')
+    equipBestPets(player)
+    return { ok: true, code: 'hatched', cat, id, pet }
   }
 
   if (cat === 'trail') {
@@ -147,6 +196,7 @@ export async function buy(player, { cat, id } = {}, limited) {
       player.trail = id
       return { ok: true, code: 'equipped', cat, id }
     }
+    if (!trailOpen(player, def)) return fail('locked', { stage: def.stage })
     if (!spend(player, def.price)) return fail('poor', { need: def.price - player.wins })
     player.trailsOwned = addTo(player.trailsOwned, id)
     player.trail = id
@@ -158,13 +208,15 @@ export async function buy(player, { cat, id } = {}, limited) {
     if (!product) return fail('unknown')
     const pass = id === 'pass2xJump' || id === 'pass2xWins'
     if (pass && player[id]) return fail('owned')
-    if (!spend(player, product.price)) return fail('poor', { need: product.price - player.wins })
+    const price = productPrice(id, player)
+    if (!spend(player, price)) return fail('poor', { need: price - player.wins })
     if (pass) {
       player[id] = true
       return { ok: true, code: 'bought', cat, id }
     }
-    const levelUp = addJump(player, product.jump)
-    return { ok: true, code: 'bought', cat, id, levelUp, reward: { jump: product.jump } }
+    const xp = minutesOfXp(player, product.minutes)
+    const levelUp = addXp(player, xp)
+    return { ok: true, code: 'bought', cat, id, levelUp, reward: { xp } }
   }
 
   return fail('unknown')
@@ -182,20 +234,59 @@ export function equip(player, { cat, id } = {}) {
   return fail('notOwned')
 }
 
+/**
+ * Pets: `op` is 'equip' | 'unequip' | 'delete' (one pet of type `id`) or
+ * 'best' (equip the best that fit).
+ */
+export function pets(player, { op, id } = {}) {
+  const owned = parsePets(player.pets)
+  const equipped = parsePets(player.petsEquipped)
+  if (op === 'best') {
+    equipBestPets(player)
+    return { ok: true, code: 'pets' }
+  }
+  if (!PET_BY_ID[id]) return fail('unknown')
+  const count = (list) => list.filter((p) => p === id).length
+  if (op === 'equip') {
+    if (count(owned) <= count(equipped)) return fail('notOwned')
+    if (equipped.length >= petSlots(player)) return fail('slots')
+    player.petsEquipped = [...equipped, id].join(',')
+    return { ok: true, code: 'pets' }
+  }
+  if (op === 'unequip') {
+    const i = equipped.indexOf(id)
+    if (i < 0) return fail('notOwned')
+    equipped.splice(i, 1)
+    player.petsEquipped = equipped.join(',')
+    return { ok: true, code: 'pets' }
+  }
+  if (op === 'delete') {
+    const i = owned.indexOf(id)
+    if (i < 0) return fail('notOwned')
+    owned.splice(i, 1)
+    player.pets = owned.join(',')
+    // Can't keep more of a pet equipped than you own.
+    while (count(equipped) > count(owned)) equipped.splice(equipped.indexOf(id), 1)
+    player.petsEquipped = equipped.join(',')
+    return { ok: true, code: 'pets' }
+  }
+  return fail('unknown')
+}
+
 /* ---------------------------------------------------------------------------
  * Rebirth
  * ------------------------------------------------------------------------- */
 
+/** At level 15: level and XP go back to zero; +1 jump, ×2 XP and more Wins for good. */
 export function rebirth(player) {
   if (!canRebirth(player)) return fail('notReady')
   player.rebirths += 1
-  player.level = 1
-  player.xp = 0
-  return { ok: true, code: 'rebirth', rebirths: player.rebirths }
+  Object.assign(player, REBIRTH_RESETS)
+  return { ok: true, code: 'rebirth', rebirths: player.rebirths, mult: rebirthMult(player.rebirths), jumps: jumpsFor(0, player.rebirths), max: maxLevel() }
 }
 
 /* ---------------------------------------------------------------------------
- * Rewards: daily, chest, playtime gifts, codes
+ * Rewards: daily, chest, playtime gifts
  * ------------------------------------------------------------------------- */
 
 /** The daily reward, collected automatically on the first join of the day. */
@@ -228,35 +319,4 @@ export function claimGift(player, session, index, now = Date.now()) {
   player.gifts = [...claimed, String(index)].join(',')
   const levelUp = grant(player, session, reward, now)
   return { ok: true, code: 'claimed', what: 'gift', index, reward, levelUp }
-}
-
-export function redeemCode(player, session, rawCode) {
-  const code = String(rawCode || '').trim().toUpperCase().slice(0, 32)
-  const reward = CODES[code]
-  if (!reward) return fail('badCode')
-  if (session.codes.includes(code)) return fail('usedCode')
-  session.codes.push(code)
-  const levelUp = grant(player, session, reward)
-  return { ok: true, code: 'redeemed', reward, levelUp }
-}
-
-/* ---------------------------------------------------------------------------
- * Goals (the banner at the top)
- * ------------------------------------------------------------------------- */
-
-/**
- * Pays out the current goal once it's done and moves on to the next.
- * Returns `{ reward, levelUp, index }` when a goal completed, else null.
- */
-export function checkGoal(player, session) {
-  const goal = goalAt(player.goal, player, session.counters, player.goalTarget)
-  if (goalValue(goal.kind, player, session.counters) < goal.target) {
-    // An endless goal stores its target the first time it's seen.
-    if (goal.endless && !player.goalTarget) player.goalTarget = goal.target
-    return null
-  }
-  const levelUp = grant(player, session, goal.reward)
-  player.goal += 1
-  player.goalTarget = player.goal >= SCRIPTED_GOAL_COUNT ? goalAt(player.goal, player, session.counters, 0).target : 0
-  return { reward: goal.reward, levelUp, index: goal.index }
 }

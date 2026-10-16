@@ -3,7 +3,9 @@ import { WebSocketTransport } from '@colyseus/ws-transport'
 import cors from 'cors'
 import express from 'express'
 
-import { EscapeRoom, drainLobbies, lobbyCount } from './rooms/EscapeRoom.js'
+import { verifyBloxityToken } from './game/identity.js'
+import { installStatReporter } from './game/stats.js'
+import { EscapeRoom, drainLobbies, lobbyCount, onlinePlayers } from './rooms/EscapeRoom.js'
 import { ROOM_NAME } from './shared/gameData.js'
 import { closeProfiles, initProfiles, leaderboards } from './store/profiles.js'
 
@@ -61,42 +63,42 @@ const server = new Server({
     })
 
     /**
-     * Auth passthrough for the Bloxity SDK.
-     *
-     * The frontend can POST `{ token, user }` here from
-     * `Legion.SDK.auth.authenticateWithServer('/api/legion-auth')`.
-     *
-     * NOTE: not wired up on the frontend yet — the game identifies players by the
-     * uid it sends when joining a lobby (the Bloxity account id, or a per-browser
-     * guest id). When you wire this, verify the token and pass the returned
-     * accessToken in the room join options instead of the raw uid.
+     * `Legion.SDK.auth.authenticateWithServer('/api/legion-auth')`: who a Boxity
+     * token belongs to, as Boxity itself says (never the `user` the client sent).
+     * The game doesn't need it (lobbies verify the token on join); it's here for
+     * tools and checks.
      */
-    app.post('/api/legion-auth', (req, res) => {
-      // TODO: verify the Bloxity JWT here before trusting req.body.user.
-      // Until that happens `req.body.user` is attacker-controlled — anyone can POST any
-      // legionId they like. Verify `req.body.token` against Bloxity's public key /
-      // introspection endpoint and derive the user from the *verified* claims.
-      res.json({
-        accessToken: 'stub',
-        user: { legionId: req.body?.user?._id },
-      })
+    app.post('/api/legion-auth', async (req, res) => {
+      const verified = await verifyBloxityToken(req.body?.token)
+      if (!verified) return res.status(401).json({ error: 'invalid token' })
+      const { user } = verified
+      return res.json({ user: { legionId: user._id ?? user.id, username: user.username, displayName: user.displayName } })
     })
 
     /**
-     * Webhook for future Bux purchases. Everything in the game is bought with
-     * Wins today; this only acknowledges so the platform doesn't retry.
+     * Gems purchase fulfilment (Boxity -> this server). Everything in the game is
+     * bought with Wins, so there is no Gems product to grant: answering non-2xx
+     * makes Boxity refund the Gems instead of taking them for nothing.
      */
-    app.post('/api/legion-webhook', (_req, res) => {
-      // TODO: verify x-legion-webhook-secret, dedupe by transactionId, grant the item.
-      res.sendStatus(200)
+    app.post('/api/legion-webhook', (req, res) => {
+      const secret = process.env.LEGION_WEBHOOK_SECRET
+      if (secret && req.get('x-legion-webhook-secret') !== secret) return res.status(401).json({ error: 'bad secret' })
+      console.warn(`[webhook] no Gems product "${String(req.body?.sku ?? '').slice(0, 60)}" in this game; refunding`)
+      return res.status(404).json({ error: 'unknown sku' })
     })
   },
 })
 
 server.define(ROOM_NAME, EscapeRoom)
 
+/** Sends everyone's stats one last time; null until the reporter starts (or when it's off). */
+let flushStats = null
+
 // Rooms persist their players in onLeave during shutdown; save those last.
-server.onShutdown(() => closeProfiles())
+server.onShutdown(async () => {
+  await flushStats?.()
+  await closeProfiles()
+})
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 let stopping = false
@@ -133,4 +135,6 @@ process.on('SIGINT', () => stopNow('SIGINT'))
 
 await initProfiles()
 await server.listen(PORT)
+// Boxity profile stats (only on Boxity hosting: BLOXITY_REPORT_TOKEN + BLOXITY_GAME_ID).
+flushStats = installStatReporter(onlinePlayers)
 console.log(`Double Jump Escape server listening on ws://localhost:${PORT} (HTTP API at http://localhost:${PORT}/api)`)

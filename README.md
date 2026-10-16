@@ -6,8 +6,10 @@ Colyseus 0.18 server for the game in `../1-double-jump-escape-client`.
   Colyseus locks a full room, so the 9th player's `joinOrCreate` opens a new
   lobby automatically.
 - **Server-authoritative economy.** Clients only send their position (and
-  jumps). The server decides Jump ticks, levels, Wins, purchases, rebirths,
-  goals, gifts and codes, checking positions against the shared map
+  jumps). The server decides XP (a jump only pays if the player's level
+  allows it in that air-time, and only a few a second; jump pads pay by
+  position at their rate), levels, Wins, purchases, eggs, rebirths, gifts,
+  offline earnings and codes, checking positions against the shared map
   (`src/shared/layout.js`). Stage pads only pay for a *run* that started in the
   lobby (or a checkpoint) and got there no faster than the player's build can
   run, so teleporting onto a pad pays nothing.
@@ -91,9 +93,15 @@ node scripts/lobby-test.js ws://host:port
 It connects 17 bots and checks:
 
 - the 8 / 8 / 1 lobby split
-- Jump ticks, level ups and trampolines
+- jumps pay XP; one more than the level allows, jump spam and standing still don't
+- jump pads (and their rebirth locks) and level ups
 - that a teleport onto a stage pad pays nothing, and a real run does
-- the 2x Wins pad needs its pass
-- codes, boots, trampolines and equipping
-- rebirth needs MAX level; the checkpoint door
-- goals advance
+- a stage behind a boot door pays nothing without the boots
+- the 2x Wins pad needs its pass; respawning on a checkpoint
+- codes, boots in order, Wins Shop perks, eggs and equipping
+- rebirth needs MAX level; worlds and the checkpoint door
+- a guest's save survives a reconnect
+
+`npm run test:economy` checks the formulas without a server: jumps per
+level, speed per boots, every pair of boots opening two stages, what a
+rebirth resets, save migration (with refunds) and clamping.
