@@ -70,12 +70,12 @@ export const THEMES = {
   toxic: theme({ top: 'toxicTile', face: 'metal', plateau: 'hazardStripe', wall: 'metalDark', band: 'slimeFloor', liquid: 'slime', spike: '#5a6270', laser: 'green', sky: 'toxic' }),
   haunted: theme({ top: 'hauntedTile', face: 'hauntedStone', plateau: 'hauntedTile', wall: 'hauntedStone', band: 'hauntedGround', liquid: 'ghost', spike: '#55506a', laser: 'magenta', sky: 'night' }),
   crystal: theme({ top: 'crystalTile', face: 'crystalWall', plateau: 'crystalTile', wall: 'crystalWall', band: 'crystalTile', liquid: 'crystal', spike: '#e0d2ff', laser: 'magenta', sky: 'pink' }),
-  factory: theme({ top: 'metal', face: 'hazardStripe', plateau: 'metal', wall: 'metalDark', band: 'hazardStripe', liquid: 'molten', spike: '#4c535e', laser: 'yellow', sky: 'warm' }),
+  factory: theme({ top: 'metal', face: 'metalDark', plateau: 'metal', wall: 'metalDark', band: 'hazardStripe', liquid: 'molten', spike: '#4c535e', laser: 'yellow', sky: 'warm' }),
   sakura: theme({ top: 'sakuraTile', face: 'woodWall', plateau: 'sakuraGrass', wall: 'woodWall', band: 'sakuraTile', liquid: 'lava', spike: '#ffb3dc', laser: 'red', sky: 'pink' }),
   magma: theme({ top: 'magmaTile', face: 'darkRock', plateau: 'magmaTile', wall: 'darkRock', band: 'lavaChecker', liquid: 'molten', spike: '#3a2622', laser: 'yellow', sky: 'dusk' }),
   space: theme({ top: 'spaceTile', face: 'metal', plateau: 'moonRock', wall: 'metalDark', band: 'spaceTile', liquid: 'void', spike: '#a3a8b4', laser: 'green', sky: 'space' }),
   galaxy: theme({ top: 'spaceTile', face: 'galaxyWall', plateau: 'galaxyWall', wall: 'galaxyWall', band: 'rainbowTile', liquid: 'void', spike: '#e0c4ff', laser: 'magenta', sky: 'space' }),
-  golden: theme({ top: 'gold', face: 'goldWall', plateau: 'gold', wall: 'goldWall', band: 'gold', liquid: 'lava', spike: '#ffd447', laser: 'red', sky: 'bright' }),
+  golden: theme({ top: 'gold', face: 'goldWall', plateau: 'gold', wall: 'w2Wall', band: 'gold', liquid: 'lava', spike: '#ffd447', laser: 'red', sky: 'bright' }),
 }
 
 /* ---------------------------------------------------------------------------

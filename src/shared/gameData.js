@@ -209,7 +209,7 @@ export function formatSpan(seconds) {
 /** A reward ({ wins, xp, boost }) as text. */
 export function describeReward(reward) {
   const parts = []
-  if (reward.wins) parts.push(`+${formatNumber(reward.wins)} Wins`)
+  if (reward.wins) parts.push(`+${formatNumber(reward.wins)} ${reward.wins === 1 ? 'Win' : 'Wins'}`)
   if (reward.xp) parts.push(`+${formatNumber(reward.xp)} XP`)
   if (reward.boost) parts.push(`2x XP for ${reward.boost} min`)
   return parts.join('  ')
