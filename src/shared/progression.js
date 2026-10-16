@@ -234,7 +234,7 @@ export function bestPadRate(player) {
  * ------------------------------------------------------------------------- */
 
 export const SHOP_PERKS = {
-  gain: { name: 'Jump Power', icon: '🦘', text: '+25% XP from every jump', per: 0.25, max: 10, base: 40, growth: 2.1 },
+  gain: { name: 'Jump Power', icon: '🦘', text: '+25% XP from every step & jump', per: 0.25, max: 10, base: 40, growth: 2.1 },
   wins: { name: 'Winner', icon: '🏆', text: '+10% Wins', per: 0.1, max: 10, base: 80, growth: 2.1 },
   speed: { name: 'Swift Feet', icon: '💨', text: '+4% run speed', per: 0.04, max: 5, base: 120, growth: 2.6 },
   luck: { name: 'Egg Luck', icon: '🍀', text: 'Rarer pets from eggs', per: 0.25, max: 5, base: 150, growth: 2.6 },
