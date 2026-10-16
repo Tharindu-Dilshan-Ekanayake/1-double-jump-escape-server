@@ -42,7 +42,7 @@ export const CONFIG = {
   /** Height of one jump (studs). Levels add jumps, not height. */
   jumpHeight: 8,
   /** Every step (this many studs of running) pays +1 XP, like every jump. */
-  stepStuds: 7.5,
+  stepStuds: 3,
   /** Levels go from 0 to MAX (15) every time; then you rebirth. */
   maxLevel: 15,
   /**
@@ -52,9 +52,9 @@ export const CONFIG = {
    * seconds), then each takes a bit longer. Tuned by scripts/simulate.mjs for
    * the time each rebirth takes.
    */
-  xpBase: 10.4,
-  xpGrowth: 1.37,
-  xpRebirth: [24.5, 5.9, 7.73, 8.69, 9.25],
+  xpBase: 7.24,
+  xpGrowth: 1.5,
+  xpRebirth: [25.45, 5.71, 7.37, 8.53, 9.98],
   /** Per rebirth: +1 jump, ×2 XP (rebirthMult) and +50% Wins. */
   rebirthJumps: 1,
   rebirthWins: 0.5,
@@ -126,14 +126,14 @@ export function nextJumpLevel(level) {
 export const BOOTS = [
   { id: 'starter', name: 'Fluffy Slippers', mult: 1, speed: 16, price: 0, color: '#ffb7d5', accent: '#ffffff' },
   { id: 'sneakers', name: 'Sneakers', mult: 1.5, speed: 19, price: 3, color: '#f4f6fb', accent: '#2f8cff' },
-  { id: 'bouncy', name: 'Bouncy Boots', mult: 2, speed: 22, price: 14, color: '#3fd16b', accent: '#ffffff' },
-  { id: 'rocket', name: 'Rocket Boots', mult: 3, speed: 25, price: 32, color: '#ff8a1f', accent: '#ffffff', glow: '#ff6a00' },
-  { id: 'lava', name: 'Lava Boots', mult: 4, speed: 28, price: 75, color: '#2a1a14', accent: '#ff5a12', glow: '#ff4d00' },
-  { id: 'frost', name: 'Frost Boots', mult: 5.5, speed: 31, price: 240, color: '#bfefff', accent: '#6fd2ff', glow: '#9fe8ff' },
-  { id: 'thunder', name: 'Thunder Boots', mult: 7.5, speed: 34, price: 1800, color: '#2b2f3a', accent: '#ffe23a', glow: '#fff07a' },
-  { id: 'galaxy', name: 'Galaxy Boots', mult: 10, speed: 38, price: 4500, color: '#5b2bd9', accent: '#ff9df5', glow: '#b98bff' },
-  { id: 'rainbow', name: 'Rainbow Boots', mult: 14, speed: 42, price: 18_000, color: '#ff4d4d', accent: '#ffd23f', glow: 'rainbow' },
-  { id: 'diamond', name: 'Diamond Boots', mult: 19, speed: 46, price: 55_000, color: '#8ff6ff', accent: '#ffffff', glow: '#c9fbff' },
+  { id: 'bouncy', name: 'Bouncy Boots', mult: 2, speed: 22, price: 5, color: '#3fd16b', accent: '#ffffff' },
+  { id: 'rocket', name: 'Rocket Boots', mult: 3, speed: 25, price: 31, color: '#ff8a1f', accent: '#ffffff', glow: '#ff6a00' },
+  { id: 'lava', name: 'Lava Boots', mult: 4, speed: 28, price: 74, color: '#2a1a14', accent: '#ff5a12', glow: '#ff4d00' },
+  { id: 'frost', name: 'Frost Boots', mult: 5.5, speed: 31, price: 140, color: '#bfefff', accent: '#6fd2ff', glow: '#9fe8ff' },
+  { id: 'thunder', name: 'Thunder Boots', mult: 7.5, speed: 34, price: 810, color: '#2b2f3a', accent: '#ffe23a', glow: '#fff07a' },
+  { id: 'galaxy', name: 'Galaxy Boots', mult: 10, speed: 38, price: 4000, color: '#5b2bd9', accent: '#ff9df5', glow: '#b98bff' },
+  { id: 'rainbow', name: 'Rainbow Boots', mult: 14, speed: 42, price: 19_000, color: '#ff4d4d', accent: '#ffd23f', glow: 'rainbow' },
+  { id: 'diamond', name: 'Diamond Boots', mult: 19, speed: 46, price: 42_000, color: '#8ff6ff', accent: '#ffffff', glow: '#c9fbff' },
   { id: 'hydra', name: 'Abyssal Hydra Boots', mult: 26, speed: 50, price: 200_000, limited: 500, color: '#0b3b4a', accent: '#2fffd0', glow: '#2fffd0' },
 ]
 
