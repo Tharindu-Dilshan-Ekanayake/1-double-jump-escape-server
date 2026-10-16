@@ -130,13 +130,17 @@ const steps = jumps()
 check('walking pays XP (steps)', steps >= 5, `${steps} steps for ${(80 * 0.8).toFixed(0)} studs (a step every ${CONFIG.stepStuds})`)
 // Running faster than the boots allow pays no more steps than they could.
 gains.length = 0
+const sprintStart = Date.now()
 for (let i = 0; i < 40; i += 1) {
   wx -= 3
   move(wx, 0.2, spawn.z)
   await wait(50)
 }
+const sprintSeconds = (Date.now() - sprintStart) / 1000
 await wait(700)
-check('steps are capped at the boots\' speed', jumps() <= 8, `${jumps()} steps for 120 studs "run" in 2 s at speed 16`)
+// The server credits at most speed x time x 1.3 (+0.05 a move) studs, plus a step already part-run.
+const stepCap = Math.ceil((16 * sprintSeconds * 1.3 + 40 * 0.05) / CONFIG.stepStuds) + 2
+check("steps are capped at the boots' speed", jumps() <= stepCap && jumps() < (120 / CONFIG.stepStuds) * 0.6, `${jumps()} steps for 120 studs "run" in ${sprintSeconds.toFixed(1)} s at speed 16 (cap ${stepCap}, uncapped ${120 / CONFIG.stepStuds})`)
 
 // XP levels you up: +1 jump at levels 4, 8, 12, 15...
 const lastUp = levelUps.at(-1)
